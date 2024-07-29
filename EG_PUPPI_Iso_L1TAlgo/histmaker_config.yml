@@ -3,18 +3,16 @@ input_nanoaod_files:
   - tag: DYToLLM50
     type: 'mc'
     filespath: '/pnfs/pp.rl.ac.uk/data/cms/store/user/asahasra/DYToLL_M-50_TuneCP5_14TeV-pythia8/step2Nano_DYToLLM50_240723_phase2l1t1400pre3v9forAR_Phase2NanoAOD/240723_124757/0000/Step2_L1P2GTNano_10.root'
-    maxevents: 10000
-    genfilter: >
+    maxevents: -1
+    gen_prompt_el_selection: >
       GenPart_statusFlags%2 == 1 && 
       (GenPart_statusFlags/256)%2 == 1 && 
       (GenPart_statusFlags/8192)%2 == 1 &&
       abs(GenPart_pdgId) == 11
+    genfilter: >
+      npromptHardLastGenEl_gen == 2 &&
+      promptHardLastGenEl_gen_pdgId[0] * promptHardLastGenEl_gen_pdgId[1] == -121
 
-new_df_columns:
-  genfilter:
-    gen_prompt_el_n: Sum({0})
-    gen_prompt_el_pt: GenPart_pt[{0}]
-    gen_prompt_el_eta: GenPart_eta[{0}]
-    gen_prompt_el_phi: GenPart_phi[{0}]
-    gen_prompt_el_pdg: GenPart_pdgId[{0}]
-    gen_prompt_el_status: GenPart_statusFlags[{0}]
+crossfilesetfilters:
+  ebfilter: abs({0}_eta) < 1.479
+  eefilter: abs({0}_eta) > 1.479 && abs({0}_eta) < 3.0

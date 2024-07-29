@@ -3,7 +3,8 @@ import yaml
 
 import ROOT
 
-from my_pyroot_tools import calculate_invM
+from define_new_df_columns import make_gen_df_cols
+from make_histos import make_gen_histos
 
 def main():
 
@@ -12,48 +13,48 @@ def main():
     with open('histmaker_config.yml') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
         tree_name = config['tree_name']
-        df_xtra_columns = config['new_df_columns']
+        #xfilefts = config['crossfilefilters']
 
         # Loop over mc and datasets
         for fileset in config['input_nanoaod_files']:
-            tag = fileset['tag']
+            filetag = fileset['tag']
             files_path = fileset['filespath']
-            maxE = fileset['maxevents']
 
+            print(f'Processing {filetag} with user choice {fileset["maxevents"]} entries')
             df = ROOT.RDataFrame(tree_name, files_path)
-
-            print(f'Processing {tag} with {maxE} of {df.Count().GetValue()} entries')
+            ROOT.RDF.Experimental.AddProgressBar(df)
+            maxE = fileset['maxevents'] if fileset['maxevents'] >= 0 else df.Count().GetValue()
             df = df.Range(maxE)
             
-            # Last Copy of Prompt Hard Process gen electron filter
+            # For Last Copy of Prompt Hard Process gen electrons
+            genpromptelselection = fileset['gen_prompt_el_selection']
+            df = make_gen_df_cols(df=df, selection=genpromptelselection, branch='GenPart', tag='promptHardLastGenEl')
             genfilter = fileset['genfilter']
-            for dfxtra_key in df_xtra_columns.keys():
-                if dfxtra_key == 'genfilter':
-                    for genfilterkeys in df_xtra_columns[dfxtra_key].keys():
-                        df = df.Define(genfilterkeys, 
-                                       df_xtra_columns[dfxtra_key][genfilterkeys].format( genfilter ) )
-                else:
-                    df = df.Define(dfxtra_key, df_xtra_columns[dfxtra_key])
-            df = df.Define('gen_prompt_el_invM', calculate_invM.format('gen_prompt_el_pt', 
-                                                                       'gen_prompt_el_eta', 
-                                                                       'gen_prompt_el_phi', 
-                                                                       0.000511) )
+            genF_df = df.Filter(genfilter)
+            #genEBF_df = genF_df.Filter('promptHardLastGenEl_gen_eta[0] < 1.479 && promptHardLastGenEl_gen_eta[1] < 1.479')
 
-            hists_dict[tag+'gen_el_n'] = df.Histo1D('gen_prompt_el_n')
-            hists_dict[tag+'gen_el_pt'] = df.Histo1D('gen_prompt_el_pt')
-            hists_dict[tag+'gen_el_eta'] = df.Histo1D('gen_prompt_el_eta')
-            hists_dict[tag+'gen_el_phi'] = df.Histo1D('gen_prompt_el_phi')
-            hists_dict[tag+'gen_el_pdg'] = df.Histo1D(('gen_el_pdg', 'gen_el_pdg', 200, -100, 100), 
-                                                      'gen_prompt_el_pdg')
-            hists_dict[tag+'gen_el_status'] = df.Histo1D('gen_prompt_el_status')
-            hists_dict[tag+'gen_el_invM'] = df.Histo1D(('gen_el_invM', 'gen_el_invM', 200, 0, 200), 
-                                                       'gen_prompt_el_invM')
+            '''
+            genfilt_df = df.Clone()
+
+            # gen el only in the EB
+            ebgenfilter = genfilter + ' && ' + fileset['ebfilter']
+            df_geneb = make_general_gen_df_cols(df=df, genfilter=ebgenfilter, clone=True)
+            eventfilter = fileset['eventfilter']
+            puppielctrebfilter = eventfilter + '&&' + fileset['puppielctrfilter']
+            puppielctrebfilter = puppielctrebfilter + ' && ' + fileset['ebfilter']
+            df_geneb = make_puppi_el_eb_df_cols(df=df, pfcandfilter=puppielctrebfilter)
+
+            hists_dict = make_puppi_el_eb_histos(hists_dict=hists_dict, df=df, tag=tag)
+            '''
+            # Fill hists_dict with selected generator particle variables
+            hists_dict = make_gen_histos(hists_dict=hists_dict, df=df, tag='all', branch='GenPart')
+            hists_dict = make_gen_histos(hists_dict=hists_dict, df=genF_df, tag='genF_promptHardLastGenElF', 
+                                         branch='promptHardLastGenEl_gen')
 
             print('Writing output histograms.')
-            with ROOT.TFile.Open(f'histograms_{tag}.root', 'RECREATE') as f:
+            with ROOT.TFile.Open(f'varhistos_{filetag}.root', 'RECREATE') as f:
                 for _, hist in hists_dict.items():
                     hist.Write()
-
 
 if __name__ == '__main__':
     main()
